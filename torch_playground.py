@@ -24,6 +24,7 @@ class CustomDataset(Dataset):
         obs = self.x[idx, :]
         y = self.y[idx]
 
+        return obs, y
 
 class NeuralNetwork(nn.Module):
 
@@ -113,13 +114,14 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
 
     # Create and forward-pass with nueral network
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    # device = (
+    #     "cuda"
+    #     if torch.cuda.is_available()
+    #     else "mps"
+    #     if torch.backends.mps.is_available()
+    #     else "cpu"
+    # )
+    device = "cpu"
     print("Using %s device"%device)
 
     model = NeuralNetwork(n_features).to(device).to(torch.float64)
