@@ -47,7 +47,7 @@ class NeuralNetwork(nn.Module):
 def train_loop(dataloader, model, loss_fn, optimizer):
 
     train_loss = 0
-    batch_count = 0
+    num_batches = len(dataloader)
 
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
@@ -60,10 +60,10 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         optimizer.step()
 
         # increment for this batch
-        batch_count += 1
         train_loss += loss
 
-        print(f"loss: {loss:>7f} ]")
+    train_loss /= num_batches
+    print(f"Train loss: {train_loss:>7f} ]")
 
 
 def test_loop(dataloader, model, loss_fn):
