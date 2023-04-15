@@ -26,6 +26,7 @@ class CustomDataset(Dataset):
 
         return obs, y
 
+
 class NeuralNetwork(nn.Module):
 
     def __init__(self, input_size):
@@ -44,12 +45,16 @@ class NeuralNetwork(nn.Module):
         return y
 
 
-def train_loop(dataloader, model, loss_fn, optimizer):
+def train_loop(dataloader, model, loss_fn, optimizer, device):
 
     train_loss = 0
     num_batches = len(dataloader)
 
     for batch, (X, y) in enumerate(dataloader):
+
+        if device == 'cuda': # move batch to GPU if device is cuda
+            X, y = X.to(device), y.to(device)
+
         # Compute prediction and loss
         pred = model(X)
         loss = loss_fn(pred, y)
@@ -66,13 +71,17 @@ def train_loop(dataloader, model, loss_fn, optimizer):
     print(f"Train loss: {train_loss:>7f} ]")
 
 
-def test_loop(dataloader, model, loss_fn):
+def test_loop(dataloader, model, loss_fn, device):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     test_loss, correct = 0, 0
 
     with torch.no_grad():
         for X, y in dataloader:
+
+            if device == 'cuda':  # move batch to GPU if device is cuda
+                X, y = X.to(device), y.to(device)
+
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
 
@@ -107,6 +116,16 @@ if __name__ == '__main__':
     # Log-scale the regression output (y)?
 
     # Create Torch dataset and dataloaders
+    # https://hsf-training.github.io/hsf-training-ml-gpu-webpage/03-usingthegpu/index.html
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print("Using %s device"%device)
+
     train_data = CustomDataset(X_train_scaled, y_train)
     test_data = CustomDataset(X_test_scaled, y_test)
 
@@ -114,22 +133,12 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
 
     # Create and forward-pass with nueral network
-    # device = (
-    #     "cuda"
-    #     if torch.cuda.is_available()
-    #     else "mps"
-    #     if torch.backends.mps.is_available()
-    #     else "cpu"
-    # )
-    device = "cpu"
-    print("Using %s device"%device)
-
     model = NeuralNetwork(n_features).to(device).to(torch.float64)
     print(model)
 
     # feed-forward inference example
     train_features, train_labels = next(iter(train_dataloader))
-    y_train_pred = model(train_features[0])
+    y_train_pred = model(train_features[0].to(device))
 
     # Train neural network
     learning_rate = 1e-3
@@ -140,8 +149,8 @@ if __name__ == '__main__':
     epochs = 10
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
-        train_loop(train_dataloader, model, loss_fn, optimizer)
-        test_loop(test_dataloader, model, loss_fn)
+        train_loop(train_dataloader, model, loss_fn, optimizer, device)
+        test_loop(test_dataloader, model, loss_fn, device)
     print("Done!")
 
 
