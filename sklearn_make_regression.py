@@ -133,25 +133,41 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
 
     # Create and forward-pass with nueral network
-    model = NeuralNetwork(n_features).to(device).to(torch.float64)
+    model = NeuralNetwork(n_features).to(device).to(torch.float64) # move model to device
     print(model)
 
     # feed-forward inference example
     train_features, train_labels = next(iter(train_dataloader))
     y_train_pred = model(train_features[0].to(device))
 
-    # Train neural network
+    # Train model or load existing weights
+    model_weights_name = './torch_models/tutorial_model_weights.pth'
     learning_rate = 1e-3
     batch_size = 64
     epochs = 5
     loss_fn = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     epochs = 10
-    for t in range(epochs):
-        print(f"Epoch {t + 1}\n-------------------------------")
-        train_loop(train_dataloader, model, loss_fn, optimizer, device)
-        test_loop(test_dataloader, model, loss_fn, device)
-    print("Done!")
+
+    try:  # Loading existing weights
+        # When loading existing weights, we need to instantiate the model class first,
+        # because the class defines the structure of the network
+        model.load_state_dict(torch.load(model_weights_name))
+        print('Loaded existing %s'%model_weights_name)
+        print('Checking oo-sample errors for %i epochs')
+        for t in range(epochs):
+            test_loop(test_dataloader, model, loss_fn, device)
+    except FileNotFoundError as e:  # Train neural network
+        print('Training for %s' % model_weights_name)
+
+        for t in range(epochs):
+            print(f"Epoch {t + 1}\n-------------------------------")
+            train_loop(train_dataloader, model, loss_fn, optimizer, device)
+            test_loop(test_dataloader, model, loss_fn, device)
+        print("Done!")
+
+        # Save model
+        torch.save(model.state_dict(), model_weights_name)
 
 
 
