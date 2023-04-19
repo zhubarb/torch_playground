@@ -4,10 +4,13 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torch import nn
 import torch
 import numpy as np
 
+# Also very goo dtutorial on different acthitectures:
+# https://pytorch.org/tutorials/beginner/introyt/modelsyt_tutorial.html
 
 class CustomDataset(Dataset):
 
@@ -45,9 +48,10 @@ class NeuralNetwork(nn.Module):
         return y
 
 
-def train_loop(dataloader, model, loss_fn, optimizer, device):
+def train_loop(dataloader, model, loss_fn, optimizer, device, epoch):
 
-    train_loss = 0
+    epoch_train_loss = 0
+    running_loss = 0
     num_batches = len(dataloader)
 
     for batch, (X, y) in enumerate(dataloader):
@@ -65,10 +69,18 @@ def train_loop(dataloader, model, loss_fn, optimizer, device):
         optimizer.step()
 
         # increment for this batch
-        train_loss += loss
+        epoch_train_loss += loss
+        running_loss += loss
 
-    train_loss /= num_batches
-    print(f"Train loss: {train_loss:>7f} ]")
+        # ...log the running loss
+        if batch % 10 == 9:  # every 10 mini-batches
+            writer.add_scalar('training loss',
+                              running_loss / 1000,
+                              epoch * len(dataloader) + batch)
+            running_loss = 0.0  # reset running_loss
+
+    epoch_train_loss /= num_batches
+    print(f"Train loss: {epoch_train_loss:>7f} ]")
 
 
 def test_loop(dataloader, model, loss_fn, device):
@@ -155,19 +167,24 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(model_weights_name))
         print('Loaded existing %s'%model_weights_name)
         print('Checking oo-sample errors for %i epochs')
-        for t in range(epochs):
+        for epoch in range(epochs):
             test_loop(test_dataloader, model, loss_fn, device)
     except FileNotFoundError as e:  # Train neural network
         print('Training for %s' % model_weights_name)
 
-        for t in range(epochs):
-            print(f"Epoch {t + 1}\n-------------------------------")
-            train_loop(train_dataloader, model, loss_fn, optimizer, device)
+        # default `log_dir` is "runs" - we'll be more specific here
+        # launch on terminal with cmd:  "tensorboard --logdir=runs/"
+        writer = SummaryWriter('./runs/tutorial')
+        writer.add_graph(model, train_features.to(device))
+
+        for epoch in range(epochs):
+            print(f"Epoch {epoch + 1}\n-------------------------------")
+            train_loop(train_dataloader, model, loss_fn, optimizer, device, epoch)
             test_loop(test_dataloader, model, loss_fn, device)
         print("Done!")
 
         # Save model
         torch.save(model.state_dict(), model_weights_name)
-
+        writer.close()
 
 
