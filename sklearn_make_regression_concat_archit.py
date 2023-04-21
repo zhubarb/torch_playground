@@ -1,4 +1,3 @@
-# https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html
 import pandas as pd
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
@@ -9,97 +8,36 @@ from torch import nn
 import torch
 import numpy as np
 
-# Also very goo dtutorial on different acthitectures:
-# https://pytorch.org/tutorials/beginner/introyt/modelsyt_tutorial.html
+from sklearn_make_regression import CustomDataset, train_loop, test_loop
 
-class CustomDataset(Dataset):
+class NeuralNetwork_Concatenated_inputs(nn.Module):
 
-    def __init__(self, x, y):
-        assert (isinstance(x, np.ndarray))
-
-        self.y = y.values
-        self.x = x
-
-    def __len__(self):
-        return len(self.x)
-
-    def __getitem__(self, idx):
-        obs = self.x[idx, :]
-        y = self.y[idx]
-
-        return obs, y
-
-
-class NeuralNetwork(nn.Module):
-
-    def __init__(self, input_size):
+    def __init__(self, input_size, input_size1):
 
         super().__init__()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(input_size, 32),
+        # the first 'input_size1' features to propagate from stack 1, and the rest from stack 2
+        self.len_features1 = input_size1
+        self.linear_relu_stack1 = nn.Sequential(
+            nn.Linear(input_size1, 32),
             nn.ReLU(),
             nn.Linear(32,16),
-            nn.ReLU(),
-            nn.Linear(16,1)
         )
+        self.linear_relu_stack2 = nn.Sequential(
+            nn.Linear(input_size-input_size1, 32),
+            nn.ReLU(),
+            nn.Linear(32,16),
+        )
+        self.output_layer = nn.Linear(32,1)
 
     def forward(self, x):
-        y= self.linear_relu_stack(x)
+        x1 = self.linear_relu_stack1(x[:, :self.len_features1])
+        x2 = self.linear_relu_stack2(x[:, self.len_features1:])
+        # concatenate the relu stack 1 and 2
+        x_interim = nn.ReLU()(torch.concat([x1,x2], dim=1))
+        # feed concat. inputs to the output layer
+        y = self.output_layer(x_interim)
+
         return y
-
-
-def train_loop(dataloader, model, loss_fn, optimizer, device, epoch, writer=None):
-
-    epoch_train_loss = 0
-    running_loss = 0
-    num_batches = len(dataloader)
-
-    for batch, (X, y) in enumerate(dataloader):
-
-        if device == 'cuda': # move batch to GPU if device is cuda
-            X, y = X.to(device), y.to(device)
-
-        # Compute prediction and loss
-        pred = model(X)
-        loss = loss_fn(pred, y)
-
-        # Backpropagation
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        # increment for this batch
-        epoch_train_loss += loss
-        running_loss += loss
-
-        # ...log the running loss
-        if batch % 10 == 9:  # every 10 mini-batches
-            writer.add_scalar('training loss',
-                              running_loss / 1000,
-                              epoch * len(dataloader) + batch)
-            running_loss = 0.0  # reset running_loss
-
-    epoch_train_loss /= num_batches
-    print(f"Train loss: {epoch_train_loss:>7f} ]")
-
-
-def test_loop(dataloader, model, loss_fn, device):
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    test_loss, correct = 0, 0
-
-    with torch.no_grad():
-        for X, y in dataloader:
-
-            if device == 'cuda':  # move batch to GPU if device is cuda
-                X, y = X.to(device), y.to(device)
-
-            pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-
-    test_loss /= num_batches
-
-    print(f"Test loss: {test_loss:>8f} \n")
 
 
 if __name__ == '__main__':
@@ -145,15 +83,17 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
 
     # Create and forward-pass with nueral network
-    model = NeuralNetwork(n_features).to(device).to(torch.float64) # move model to device
+    input_size1 = 2  # the first two features to propagate from stack 1, and the rest from stack 2
+    model = NeuralNetwork_Concatenated_inputs(n_features, input_size1).to(device).to(torch.float64)  # move model to device
     print(model)
 
     # feed-forward inference example
     train_features, train_labels = next(iter(train_dataloader))
-    y_train_pred = model(train_features[0].to(device))
+    expanded_input = train_features[0][None,:].to(device)  # expand from shape (5) to (5,1) to make compatib. w batch processing
+    y_train_pred = model(expanded_input)
 
-    # Train model or load existing weights
-    model_weights_name = './torch_models/tutorial_model_weights.pth'
+     # Train model or load existing weights
+    model_weights_name = './torch_models/tutorial_w_concat_model_weights.pth'
     learning_rate = 1e-3
     batch_size = 64
     epochs = 5
@@ -173,8 +113,9 @@ if __name__ == '__main__':
         print('Training for %s' % model_weights_name)
 
         # default `log_dir` is "runs" - we'll be more specific here
-        # launch on terminal with cmd:  "tensorboard --logdir=runs/tutorial_regular/"
-        writer = SummaryWriter('runs/tutorial_regular')
+        # launch on terminal with cmd:  "tensorboard --logdir=runs/tutorial_concat/"
+        # double-click on the grey NeuralNetwork mode to see the two parallel Relu stacks
+        writer = SummaryWriter('runs/tutorial_concat')
         writer.add_graph(model, train_features.to(device))
 
         for epoch in range(epochs):
@@ -186,5 +127,3 @@ if __name__ == '__main__':
         # Save model
         torch.save(model.state_dict(), model_weights_name)
         writer.close()
-
-
